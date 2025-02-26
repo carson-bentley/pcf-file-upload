@@ -199,4 +199,4 @@ Placeholder for cleanup logic.
 Conclusion
 This AttachmentControl PCF component provides a robust file upload solution with UI enhancements, validation, and base64 conversion. It is well-suited for PowerApps applications requiring file handling capabilities.
 
-Share
+
