@@ -9,9 +9,9 @@
 
   <PropertyGroup>
     <ProjectGuid>97e557f8-df69-4ad0-97d9-edd73d9cdb85</ProjectGuid>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v9.0.202</TargetFrameworkVersion>
     <!--Remove TargetFramework when this is available in 16.1-->
-    <TargetFramework>net462</TargetFramework>
+    
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <SolutionRootPath>src</SolutionRootPath>
   </PropertyGroup>

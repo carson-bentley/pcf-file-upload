@@ -1,3 +1,23 @@
+# Attachment Upload
+## Build/publish instructions
+    - Download .net sdk at https://dotnet.microsoft.com/en-us/download
+    - add NuGet source (if not already defined) by running `dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org` in terminal
+    - Install powerapps cli tool by running `dotnet tool install --global Microsoft.PowerApps.CLI.Tool`
+        - Might take a minute, just let it do it's thing
+    - Verify pac installation by running `pac` in terminal
+    - Add vscode power apps tool extension
+        - Not sure if this is necessary after installing the pac CLI through .NET
+    - In VsCode left sidebar, ensure correct auth profile and environment/solution under the power platform tab
+    - Install dependencies using npm install in root directory
+    - Build project using npm run build
+    - Push custom control to environment by running `pac pcf push --publisher-prefix cr5cc`
+        - Also takes a long time
+## Using the component
+    - After the component has successfully uploaded to the environment, go to solutions > desired app > apps > on app, click 3 dots and then edit > little pencil mark to the left of the form
+    - Component tab on control ribbon, then get more components on bottom left of the components tab. Pushed component should show up under built by others, add it to app then use like a regular component
+
+
+
 The AttachmentControl component is a PowerApps Component Framework (PCF) control designed for handling file uploads. It supports multiple file uploads, drag-and-drop functionality, file previews, and base64 encoding for easy data handling.
 
 Features

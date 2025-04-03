@@ -15,9 +15,13 @@
 
   <PropertyGroup>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
-    <!--Remove TargetFramework when this is available in 16.1-->
-    <TargetFramework>net462</TargetFramework>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <PublisherPrefix>cr5cc</PublisherPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory)packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
