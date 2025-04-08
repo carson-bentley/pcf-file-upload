@@ -145,6 +145,83 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         return true;
     }
 
+    private createFullScreenPreview(): HTMLDivElement {
+        // Create container at document level instead of component level
+        const fullScreenContainer = document.createElement("div");
+        fullScreenContainer.style.position = "fixed";
+        fullScreenContainer.style.top = "0";
+        fullScreenContainer.style.left = "0";
+        fullScreenContainer.style.width = "100vw";
+        fullScreenContainer.style.height = "100vh";
+        fullScreenContainer.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+        fullScreenContainer.style.display = "none";
+        fullScreenContainer.style.zIndex = "999999";
+        fullScreenContainer.style.overflow = "auto";
+        fullScreenContainer.style.cursor = "default";
+
+        const closeButton = document.createElement("button");
+        closeButton.innerHTML = `
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        `;
+        closeButton.style.position = "fixed";
+        closeButton.style.top = "50px";
+        closeButton.style.right = "20px";
+        closeButton.style.background = "none";
+        closeButton.style.border = "none";
+        closeButton.style.cursor = "pointer";
+        closeButton.style.padding = "8px";
+        closeButton.style.color = "#ff4444";
+        closeButton.style.transition = "all 0.2s";
+        closeButton.style.zIndex = "1000000";
+        closeButton.onmouseover = () => {
+            closeButton.style.color = "#ff0000";
+            closeButton.style.transform = "scale(1.1)";
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.color = "#ff4444";
+            closeButton.style.transform = "scale(1)";
+        };
+        closeButton.onclick = () => {
+            fullScreenContainer.style.display = "none";
+        };
+
+        const previewContent = document.createElement("div");
+        previewContent.style.width = "100%";
+        previewContent.style.height = "100%";
+        previewContent.style.display = "flex";
+        previewContent.style.justifyContent = "center";
+        previewContent.style.alignItems = "center";
+        previewContent.style.padding = "20px";
+        previewContent.style.boxSizing = "border-box";
+        previewContent.style.cursor = "default";
+
+        fullScreenContainer.appendChild(closeButton);
+        fullScreenContainer.appendChild(previewContent);
+
+        // Add click handler to close when clicking outside content
+        fullScreenContainer.addEventListener("click", (event) => {
+            if (event.target === fullScreenContainer) {
+                fullScreenContainer.style.display = "none";
+            }
+        });
+
+        // Add escape key handler
+        const escapeHandler = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                fullScreenContainer.style.display = "none";
+            }
+        };
+        document.addEventListener("keydown", escapeHandler);
+
+        // Append to document body instead of component container
+        document.body.appendChild(fullScreenContainer);
+
+        return fullScreenContainer;
+    }
+
     private displayPreviews(): void {
         this.previewContainer.innerHTML = ""; // Clear previous previews
 
@@ -153,20 +230,94 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
             return;
         }
 
+        // Create fullScreenContainer at document level
+        const fullScreenContainer = this.createFullScreenPreview();
+
         this.fileBase64List.forEach((file, index) => {
             const fileContainer = document.createElement("div");
             fileContainer.style.marginBottom = "10px";
+            fileContainer.style.position = "relative"; // Position relative for absolute positioning of the button
 
             const fileLabel = document.createElement("p");
             fileLabel.textContent = `File ${index + 1}: ${file.name}`;
 
             const removeButton = document.createElement("button");
-            removeButton.textContent = "Remove";
+            removeButton.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                </svg>
+            `;
+            removeButton.style.background = "none";
+            removeButton.style.border = "none";
+            removeButton.style.cursor = "pointer";
+            removeButton.style.padding = "5px";
+            removeButton.style.color = "#666";
+            removeButton.style.transition = "all 0.2s";
             removeButton.style.marginLeft = "10px";
+            removeButton.style.verticalAlign = "middle";
+            removeButton.onmouseover = () => {
+                removeButton.style.color = "#ff4444";
+                removeButton.style.transform = "scale(1.1)";
+            };
+            removeButton.onmouseout = () => {
+                removeButton.style.color = "#666";
+                removeButton.style.transform = "scale(1)";
+            };
             removeButton.onclick = () => this.removeFile(index);
+
+            const fullScreenButton = document.createElement("button");
+            fullScreenButton.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                </svg>
+            `;
+            fullScreenButton.style.position = "absolute";
+            fullScreenButton.style.top = "5px";
+            fullScreenButton.style.right = "5px";
+            fullScreenButton.style.background = "none";
+            fullScreenButton.style.border = "none";
+            fullScreenButton.style.cursor = "pointer";
+            fullScreenButton.style.padding = "5px";
+            fullScreenButton.style.color = "#666";
+            fullScreenButton.style.transition = "color 0.2s";
+            fullScreenButton.onmouseover = () => {
+                fullScreenButton.style.color = "#0078d4";
+            };
+            fullScreenButton.onmouseout = () => {
+                fullScreenButton.style.color = "#666";
+            };
+            fullScreenButton.onclick = () => {
+                const previewContent = fullScreenContainer.querySelector("div");
+                if (previewContent) {
+                    previewContent.innerHTML = ""; // Clear previous content
+                    if (file.data.startsWith("data:image/")) {
+                        const img = document.createElement("img");
+                        img.src = file.data;
+                        img.style.maxWidth = "100%";
+                        previewContent.appendChild(img);
+                    } else if (file.data.startsWith("data:application/pdf")) {
+                        const iframe = document.createElement("iframe");
+                        iframe.src = file.data;
+                        iframe.style.width = "100%";
+                        iframe.style.height = "100%";
+                        previewContent.appendChild(iframe);
+                    } else if (file.data.startsWith("data:text/")) {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = atob(file.data.split(",")[1]); // Decode Base64
+                        textArea.readOnly = true;
+                        textArea.style.width = "100%";
+                        textArea.style.height = "100%";
+                        previewContent.appendChild(textArea);
+                    }
+                    fullScreenContainer.style.display = "block";
+                }
+            };
 
             fileContainer.appendChild(fileLabel);
             fileContainer.appendChild(removeButton);
+            fileContainer.appendChild(fullScreenButton);
 
             if (file.data.startsWith("data:image/")) {
                 const img = document.createElement("img");
