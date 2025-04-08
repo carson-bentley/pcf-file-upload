@@ -19,8 +19,20 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         this.container = container;
         this.notifyOutputChanged = notifyOutputChanged;
 
+        // Check if there is any data in the uploadedFile field
+        const uploadedFileData = context.parameters.uploadedFile.raw;
+        if (uploadedFileData) {
+            try {
+                const parsedData = JSON.parse(uploadedFileData);
+                this.fileBase64List = parsedData; // Populate the fileBase64List with the parsed data
+            } catch (error) {
+                console.error("Error parsing uploaded file data:", error);
+            }
+        }
+
         // Initialize the UI
         this.createUI();
+        this.displayPreviews(); // Display the previews after initializing the UI
     }
 
     private createUI(): void {
@@ -191,7 +203,10 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
     }
 
     public getOutputs(): IOutputs {
+        const fileData = this.fileBase64List.length > 0 ? this.fileBase64List[0].data : null;
         return { uploadedFile: JSON.stringify(this.fileBase64List) }; // Return files as a JSON string
+        
+    
     }
 
     public destroy(): void {
