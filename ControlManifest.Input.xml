@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="AttachmentNamespace" constructor="AttachmentControl" version="1.0.0" display-name-key="AttachmentControl" description-key="AttachmentControl description" control-type="standard" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <property name="uploadedFile" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="Multiple" usage="bound" required="true" />
+    <property name="uploadedFileOverflow" display-name-key="Overflow_Property_Display_Key" description-key="Overflow_Property_Desc_Key" of-type="Multiple" usage="bound" required="false" />
+    <resources>
+      <code path="index.ts" order="1"/>
+    </resources>
+  </control>
+</manifest> 

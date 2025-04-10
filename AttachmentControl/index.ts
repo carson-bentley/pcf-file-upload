@@ -5,10 +5,10 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
     private fileInput: HTMLInputElement;
     private previewContainer: HTMLDivElement;
     private notifyOutputChanged: () => void;
-    private fileBase64List: { name: string; data: string }[] = []; // List of uploaded files (name + base64)
+    private fileBase64List: { name: string; data: string }[] = [];
 
-    private readonly maxFileSizeMB: number = 5; // Maximum file size in MB
-    private readonly acceptedFileTypes: string[] = ["image/", "application/pdf", "text/"]; // Allowed file types
+    private readonly maxFileSizeMB: number = 5;
+    private readonly acceptedFileTypes: string[] = ["image/", "application/pdf", "text/"];
 
     public init(
         context: ComponentFramework.Context<IInputs>,
@@ -19,46 +19,45 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         this.container = container;
         this.notifyOutputChanged = notifyOutputChanged;
 
-        // Check if there is any data in the uploadedFile field
         const uploadedFileData = context.parameters.uploadedFile.raw;
-        if (uploadedFileData) {
-            try {
-                const parsedData = JSON.parse(uploadedFileData);
-                this.fileBase64List = parsedData; // Populate the fileBase64List with the parsed data
-            } catch (error) {
-                console.error("Error parsing uploaded file data:", error);
+        const overflowFileData = context.parameters.uploadedFileOverflow?.raw;
+
+        this.fileBase64List = [];
+
+        try {
+            if (uploadedFileData) {
+                this.fileBase64List = JSON.parse(uploadedFileData);
             }
+            if (overflowFileData) {
+                this.fileBase64List = this.fileBase64List.concat(JSON.parse(overflowFileData));
+            }
+        } catch (error) {
+            console.error("Error parsing uploaded file data:", error);
         }
 
-        // Initialize the UI
         this.createUI();
-        this.displayPreviews(); // Display the previews after initializing the UI
+        this.displayPreviews();
     }
 
     private createUI(): void {
-        // File input (hidden, allows multiple files)
         this.fileInput = document.createElement("input");
         this.fileInput.type = "file";
-        this.fileInput.accept = this.acceptedFileTypes.join(","); // Allowed file types
+        this.fileInput.accept = this.acceptedFileTypes.join(",");
         this.fileInput.style.display = "none";
-        this.fileInput.multiple = true; // Allow multiple files
+        this.fileInput.multiple = true;
         this.fileInput.onchange = this.handleFileUpload.bind(this);
 
-        // Upload icon
         const uploadIcon = this.createUploadIcon();
         uploadIcon.onclick = () => this.fileInput.click();
 
-        // Drag-and-drop area
         const dragDropArea = this.createDragDropArea();
 
-        // Preview container
         this.previewContainer = document.createElement("div");
         this.previewContainer.style.border = "1px solid #ddd";
         this.previewContainer.style.padding = "10px";
         this.previewContainer.style.marginTop = "10px";
         this.previewContainer.textContent = "No files uploaded.";
 
-        // Append elements to the container
         this.container.appendChild(uploadIcon);
         this.container.appendChild(dragDropArea);
         this.container.appendChild(this.fileInput);
@@ -121,24 +120,85 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         const reader = new FileReader();
         reader.onload = () => {
             const fileData = reader.result as string;
-            this.fileBase64List.push({ name: file.name, data: fileData });
-            this.notifyOutputChanged();
-            this.displayPreviews();
+            const newFile = { name: file.name, data: fileData };
+            
+            // Check if we can add to main field
+            const testList = [...this.fileBase64List, newFile];
+            const mainFieldJson = JSON.stringify(testList);
+            
+            if (mainFieldJson.length <= 1000000) {
+                this.fileBase64List.push(newFile);
+                this.notifyOutputChanged();
+                this.displayPreviews();
+                return;
+            }
+
+            // If main field is full, try to split the file
+            const currentMainFieldJson = JSON.stringify(this.fileBase64List);
+            const remainingSpace = 1000000 - currentMainFieldJson.length;
+            
+            if (remainingSpace > 0) {
+                // Split the file data
+                const splitPoint = Math.floor(remainingSpace / 2); // Divide by 2 to account for JSON structure
+                const part1 = fileData.substring(0, splitPoint);
+                const part2 = fileData.substring(splitPoint);
+                
+                // Add first part to main field
+                this.fileBase64List.push({ name: file.name, data: part1 });
+                
+                // Add second part to overflow
+                const currentOverflow = this.getCurrentOverflow();
+                const testOverflow = [...currentOverflow, { name: file.name, data: part2 }];
+                const testOverflowJson = JSON.stringify(testOverflow);
+                
+                if (testOverflowJson.length <= 1000000) {
+                    this.fileBase64List.push({ name: file.name, data: part2 });
+                    this.notifyOutputChanged();
+                    this.displayPreviews();
+                    return;
+                }
+            }
+
+            // If we can't split or fit in overflow, show error
+            alert("Maximum storage capacity reached. Cannot upload more files.");
         };
-        reader.readAsDataURL(file); // Convert file to Base64
+        reader.readAsDataURL(file);
+    }
+
+    private getCurrentOverflow(): { name: string; data: string }[] {
+        const mainFieldJson = JSON.stringify(this.fileBase64List);
+        if (mainFieldJson.length <= 1000000) {
+            return [];
+        }
+
+        const part1: { name: string; data: string }[] = [];
+        const part2: { name: string; data: string }[] = [];
+        let currentLength = 0;
+
+        for (const file of this.fileBase64List) {
+            const fileJson = JSON.stringify(file);
+            const testLength = currentLength + fileJson.length + 1;
+            
+            if (testLength <= 1000000) {
+                part1.push(file);
+                currentLength = testLength;
+            } else {
+                part2.push(file);
+            }
+        }
+
+        return part2;
     }
 
     private validateFile(file: File): boolean {
-        // Check file size
         const maxSizeBytes = this.maxFileSizeMB * 1024 * 1024;
         if (file.size > maxSizeBytes) {
             alert(`File "${file.name}" exceeds the ${this.maxFileSizeMB} MB size limit.`);
             return false;
         }
 
-        // Check file type
         if (!this.acceptedFileTypes.some((type) => file.type.startsWith(type))) {
-            alert(`Unsupported file type for "${file.name}". Please upload a valid file.`);
+            alert(`Unsupported file type for "${file.name}".`);
             return false;
         }
 
@@ -146,7 +206,6 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
     }
 
     private createFullScreenPreview(): HTMLDivElement {
-        // Create container at document level instead of component level
         const fullScreenContainer = document.createElement("div");
         fullScreenContainer.style.position = "fixed";
         fullScreenContainer.style.top = "0";
@@ -160,12 +219,7 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         fullScreenContainer.style.cursor = "default";
 
         const closeButton = document.createElement("button");
-        closeButton.innerHTML = `
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        `;
+        closeButton.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
         closeButton.style.position = "fixed";
         closeButton.style.top = "50px";
         closeButton.style.right = "20px";
@@ -201,14 +255,12 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         fullScreenContainer.appendChild(closeButton);
         fullScreenContainer.appendChild(previewContent);
 
-        // Add click handler to close when clicking outside content
         fullScreenContainer.addEventListener("click", (event) => {
             if (event.target === fullScreenContainer) {
                 fullScreenContainer.style.display = "none";
             }
         });
 
-        // Add escape key handler
         const escapeHandler = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 fullScreenContainer.style.display = "none";
@@ -216,39 +268,49 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         };
         document.addEventListener("keydown", escapeHandler);
 
-        // Append to document body instead of component container
         document.body.appendChild(fullScreenContainer);
-
         return fullScreenContainer;
     }
 
     private displayPreviews(): void {
-        this.previewContainer.innerHTML = ""; // Clear previous previews
+        this.previewContainer.innerHTML = "";
 
         if (this.fileBase64List.length === 0) {
             this.previewContainer.textContent = "No files uploaded.";
             return;
         }
 
-        // Create fullScreenContainer at document level
         const fullScreenContainer = this.createFullScreenPreview();
 
-        this.fileBase64List.forEach((file, index) => {
+        // Group files by name to handle split files
+        const fileGroups = new Map<string, { name: string; data: string }[]>();
+        this.fileBase64List.forEach(file => {
+            if (!fileGroups.has(file.name)) {
+                fileGroups.set(file.name, []);
+            }
+            fileGroups.get(file.name)!.push(file);
+        });
+
+        fileGroups.forEach((files, fileName) => {
             const fileContainer = document.createElement("div");
             fileContainer.style.marginBottom = "10px";
-            fileContainer.style.position = "relative"; // Position relative for absolute positioning of the button
+            fileContainer.style.position = "relative";
+            fileContainer.style.padding = "8px";
+            fileContainer.style.border = "1px solid #ddd";
+            fileContainer.style.borderRadius = "4px";
+            fileContainer.style.backgroundColor = "#f9f9f9";
 
             const fileLabel = document.createElement("p");
-            fileLabel.textContent = `File ${index + 1}: ${file.name}`;
+            fileLabel.textContent = `File: ${fileName}`;
+            fileLabel.style.margin = "0 0 8px 0";
+            fileLabel.style.fontWeight = "bold";
+
+            const buttonContainer = document.createElement("div");
+            buttonContainer.style.display = "flex";
+            buttonContainer.style.gap = "8px";
 
             const removeButton = document.createElement("button");
-            removeButton.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 6h18"></path>
-                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                </svg>
-            `;
+            removeButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>';
             removeButton.style.background = "none";
             removeButton.style.border = "none";
             removeButton.style.cursor = "pointer";
@@ -265,14 +327,15 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
                 removeButton.style.color = "#666";
                 removeButton.style.transform = "scale(1)";
             };
-            removeButton.onclick = () => this.removeFile(index);
+            removeButton.onclick = () => {
+                // Remove all parts of the file
+                this.fileBase64List = this.fileBase64List.filter(f => f.name !== fileName);
+                this.notifyOutputChanged();
+                this.displayPreviews();
+            };
 
             const fullScreenButton = document.createElement("button");
-            fullScreenButton.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                </svg>
-            `;
+            fullScreenButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>';
             fullScreenButton.style.position = "absolute";
             fullScreenButton.style.top = "5px";
             fullScreenButton.style.right = "5px";
@@ -291,21 +354,23 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
             fullScreenButton.onclick = () => {
                 const previewContent = fullScreenContainer.querySelector("div");
                 if (previewContent) {
-                    previewContent.innerHTML = ""; // Clear previous content
-                    if (file.data.startsWith("data:image/")) {
+                    previewContent.innerHTML = "";
+                    // Combine all parts of the file for preview
+                    const combinedData = files.map(f => f.data).join("");
+                    if (combinedData.startsWith("data:image/")) {
                         const img = document.createElement("img");
-                        img.src = file.data;
+                        img.src = combinedData;
                         img.style.maxWidth = "100%";
                         previewContent.appendChild(img);
-                    } else if (file.data.startsWith("data:application/pdf")) {
+                    } else if (combinedData.startsWith("data:application/pdf")) {
                         const iframe = document.createElement("iframe");
-                        iframe.src = file.data;
+                        iframe.src = combinedData;
                         iframe.style.width = "100%";
                         iframe.style.height = "100%";
                         previewContent.appendChild(iframe);
-                    } else if (file.data.startsWith("data:text/")) {
+                    } else if (combinedData.startsWith("data:text/")) {
                         const textArea = document.createElement("textarea");
-                        textArea.value = atob(file.data.split(",")[1]); // Decode Base64
+                        textArea.value = atob(combinedData.split(",")[1]);
                         textArea.readOnly = true;
                         textArea.style.width = "100%";
                         textArea.style.height = "100%";
@@ -315,60 +380,90 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
                 }
             };
 
+            buttonContainer.appendChild(removeButton);
+            buttonContainer.appendChild(fullScreenButton);
             fileContainer.appendChild(fileLabel);
-            fileContainer.appendChild(removeButton);
-            fileContainer.appendChild(fullScreenButton);
+            fileContainer.appendChild(buttonContainer);
 
-            if (file.data.startsWith("data:image/")) {
+            // Show preview for all file types
+            const combinedData = files.map(f => f.data).join("");
+            if (combinedData.startsWith("data:image/")) {
                 const img = document.createElement("img");
-                img.src = file.data;
+                img.src = combinedData;
                 img.style.maxWidth = "100%";
+                img.style.maxHeight = "200px";
+                img.style.objectFit = "contain";
                 fileContainer.appendChild(img);
-            } else if (file.data.startsWith("data:application/pdf")) {
+            } else if (combinedData.startsWith("data:application/pdf")) {
                 const iframe = document.createElement("iframe");
-                iframe.src = file.data;
+                iframe.src = combinedData;
                 iframe.style.width = "100%";
                 iframe.style.height = "200px";
+                iframe.style.border = "none";
                 fileContainer.appendChild(iframe);
-            } else if (file.data.startsWith("data:text/")) {
+            } else if (combinedData.startsWith("data:text/")) {
                 const textArea = document.createElement("textarea");
-                textArea.value = atob(file.data.split(",")[1]); // Decode Base64
+                textArea.value = atob(combinedData.split(",")[1]);
                 textArea.readOnly = true;
                 textArea.style.width = "100%";
                 textArea.style.height = "100px";
+                textArea.style.resize = "none";
+                textArea.style.padding = "8px";
+                textArea.style.border = "1px solid #ddd";
+                textArea.style.borderRadius = "4px";
                 fileContainer.appendChild(textArea);
             }
+
             this.previewContainer.appendChild(fileContainer);
         });
     }
 
-    private removeFile(index: number): void {
-        this.fileBase64List.splice(index, 1); // Remove the file from the list
-        this.notifyOutputChanged();
+    public updateView(context: ComponentFramework.Context<IInputs>): void {
+        const uploadedFileData = context.parameters.uploadedFile.raw;
+        const overflowFileData = context.parameters.uploadedFileOverflow?.raw;
+
+        this.fileBase64List = [];
+        try {
+            if (uploadedFileData) this.fileBase64List = JSON.parse(uploadedFileData);
+            if (overflowFileData) this.fileBase64List = this.fileBase64List.concat(JSON.parse(overflowFileData));
+        } catch (e) {
+            this.fileBase64List = [];
+            console.error("Failed to parse file list on updateView");
+        }
+
         this.displayPreviews();
     }
 
-    public updateView(context: ComponentFramework.Context<IInputs>): void {
-        const uploadedFileData = context.parameters.uploadedFile.raw;
-        if (uploadedFileData) {
-          try {
-            this.fileBase64List = JSON.parse(uploadedFileData);
-          } catch (e) {
-            this.fileBase64List = [];
-            console.error("Failed to parse file list on updateView");
-          }
-        } else {
-          this.fileBase64List = [];
-        }
-      
-        this.displayPreviews(); // 👈 this is correct
-      }
-
     public getOutputs(): IOutputs {
-        const fileData = this.fileBase64List.length > 0 ? this.fileBase64List[0].data : null;
-        return { uploadedFile: JSON.stringify(this.fileBase64List) }; // Return files as a JSON string
+        const mainFieldJson = JSON.stringify(this.fileBase64List);
         
-    
+        if (mainFieldJson.length <= 1000000) {
+            return {
+                uploadedFile: mainFieldJson,
+                uploadedFileOverflow: undefined
+            };
+        }
+
+        const part1: { name: string; data: string }[] = [];
+        const part2: { name: string; data: string }[] = [];
+        let currentLength = 0;
+
+        for (const file of this.fileBase64List) {
+            const fileJson = JSON.stringify(file);
+            const testLength = currentLength + fileJson.length + 1;
+            
+            if (testLength <= 1000000) {
+                part1.push(file);
+                currentLength = testLength;
+            } else {
+                part2.push(file);
+            }
+        }
+
+        return {
+            uploadedFile: JSON.stringify(part1),
+            uploadedFileOverflow: JSON.stringify(part2)
+        };
     }
 
     public destroy(): void {

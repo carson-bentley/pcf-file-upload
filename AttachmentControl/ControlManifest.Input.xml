@@ -19,7 +19,7 @@
     </external-service-usage>
     <!-- property node identifies a specific, configurable piece of data that the control expects from CDS -->
     <property name="uploadedFile" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="Multiple" usage="bound" required="true" />
- 
+    <property name="uploadedFileOverflow" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="Multiple" usage="bound" required="false" />
     <!--
     <property name="cr5cc_rfiresponse" display-name-key="RFI Response" description-key="RFI Response to User" of-type="File" usage="output" required="false" />
       Property node's of-type attribute can be of-type-group attribute.
