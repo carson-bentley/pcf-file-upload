@@ -122,7 +122,7 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
             const fileData = reader.result as string;
             const newFile = { name: file.name, data: fileData };
             
-            // Check if we can add to main field
+            // First try to add to main field
             const testList = [...this.fileBase64List, newFile];
             const mainFieldJson = JSON.stringify(testList);
             
@@ -133,29 +133,34 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
                 return;
             }
 
-            // If main field is full, try to split the file
+            // If main field is full, check if we can split the file
             const currentMainFieldJson = JSON.stringify(this.fileBase64List);
             const remainingSpace = 1000000 - currentMainFieldJson.length;
             
             if (remainingSpace > 0) {
-                // Split the file data
+                // Calculate split points and test if both parts can fit
                 const splitPoint = Math.floor(remainingSpace / 2); // Divide by 2 to account for JSON structure
                 const part1 = fileData.substring(0, splitPoint);
                 const part2 = fileData.substring(splitPoint);
                 
-                // Add first part to main field
-                this.fileBase64List.push({ name: file.name, data: part1 });
+                // Test if first part can fit in main field
+                const testMainField = [...this.fileBase64List, { name: file.name, data: part1 }];
+                const testMainFieldJson = JSON.stringify(testMainField);
                 
-                // Add second part to overflow
-                const currentOverflow = this.getCurrentOverflow();
-                const testOverflow = [...currentOverflow, { name: file.name, data: part2 }];
-                const testOverflowJson = JSON.stringify(testOverflow);
-                
-                if (testOverflowJson.length <= 1000000) {
-                    this.fileBase64List.push({ name: file.name, data: part2 });
-                    this.notifyOutputChanged();
-                    this.displayPreviews();
-                    return;
+                if (testMainFieldJson.length <= 1000000) {
+                    // Test if second part can fit in overflow
+                    const currentOverflow = this.getCurrentOverflow();
+                    const testOverflow = [...currentOverflow, { name: file.name, data: part2 }];
+                    const testOverflowJson = JSON.stringify(testOverflow);
+                    
+                    if (testOverflowJson.length <= 1000000) {
+                        // Both parts can fit, add them
+                        this.fileBase64List.push({ name: file.name, data: part1 });
+                        this.fileBase64List.push({ name: file.name, data: part2 });
+                        this.notifyOutputChanged();
+                        this.displayPreviews();
+                        return;
+                    }
                 }
             }
 
@@ -276,7 +281,6 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
         this.previewContainer.innerHTML = "";
 
         if (this.fileBase64List.length === 0) {
-            this.previewContainer.textContent = "No files uploaded.";
             return;
         }
 
@@ -435,34 +439,90 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
     }
 
     public getOutputs(): IOutputs {
-        const mainFieldJson = JSON.stringify(this.fileBase64List);
-        
-        if (mainFieldJson.length <= 1000000) {
+        // First, try to merge any split files that can fit in the main field
+        const mergedFiles: { name: string; data: string }[] = [];
+        const remainingFiles: { name: string; data: string }[] = [];
+        const fileGroups = new Map<string, { name: string; data: string }[]>();
+
+        // Group files by name to identify split files
+        this.fileBase64List.forEach(file => {
+            if (!fileGroups.has(file.name)) {
+                fileGroups.set(file.name, []);
+            }
+            fileGroups.get(file.name)!.push(file);
+        });
+
+        // Try to merge split files
+        fileGroups.forEach((files, fileName) => {
+            if (files.length > 1) {
+                // This is a split file, try to merge it
+                const mergedData = files.map(f => f.data).join("");
+                const mergedFile = { name: fileName, data: mergedData };
+                const testMergedList = [...mergedFiles, mergedFile];
+                const testMergedJson = JSON.stringify(testMergedList);
+
+                if (testMergedJson.length <= 1000000) {
+                    // Merged file can fit in main field
+                    mergedFiles.push(mergedFile);
+                } else {
+                    // Keep the split files
+                    remainingFiles.push(...files);
+                }
+            } else {
+                // Single file, add to appropriate list
+                const testList = [...mergedFiles, files[0]];
+                const testJson = JSON.stringify(testList);
+
+                if (testJson.length <= 1000000) {
+                    mergedFiles.push(files[0]);
+                } else {
+                    remainingFiles.push(files[0]);
+                }
+            }
+        });
+
+        // If all files can fit in main field, return them there
+        if (remainingFiles.length === 0) {
             return {
-                uploadedFile: mainFieldJson,
+                uploadedFile: JSON.stringify(mergedFiles),
                 uploadedFileOverflow: undefined
             };
         }
 
-        const part1: { name: string; data: string }[] = [];
-        const part2: { name: string; data: string }[] = [];
+        // Otherwise, distribute between main and overflow fields
+        const mainFieldFiles: { name: string; data: string }[] = [];
+        const overflowFiles: { name: string; data: string }[] = [];
         let currentLength = 0;
 
-        for (const file of this.fileBase64List) {
+        // First add merged files to main field
+        mergedFiles.forEach(file => {
             const fileJson = JSON.stringify(file);
             const testLength = currentLength + fileJson.length + 1;
             
             if (testLength <= 1000000) {
-                part1.push(file);
+                mainFieldFiles.push(file);
                 currentLength = testLength;
             } else {
-                part2.push(file);
+                overflowFiles.push(file);
             }
-        }
+        });
+
+        // Then add remaining files
+        remainingFiles.forEach(file => {
+            const fileJson = JSON.stringify(file);
+            const testLength = currentLength + fileJson.length + 1;
+            
+            if (testLength <= 1000000) {
+                mainFieldFiles.push(file);
+                currentLength = testLength;
+            } else {
+                overflowFiles.push(file);
+            }
+        });
 
         return {
-            uploadedFile: JSON.stringify(part1),
-            uploadedFileOverflow: JSON.stringify(part2)
+            uploadedFile: JSON.stringify(mainFieldFiles),
+            uploadedFileOverflow: JSON.stringify(overflowFiles)
         };
     }
 
