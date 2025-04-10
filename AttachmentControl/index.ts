@@ -338,7 +338,6 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
                 textArea.style.height = "100px";
                 fileContainer.appendChild(textArea);
             }
-
             this.previewContainer.appendChild(fileContainer);
         });
     }
@@ -350,8 +349,20 @@ export class AttachmentControl implements ComponentFramework.StandardControl<IIn
     }
 
     public updateView(context: ComponentFramework.Context<IInputs>): void {
-        // Update the view when bound data changes
-    }
+        const uploadedFileData = context.parameters.uploadedFile.raw;
+        if (uploadedFileData) {
+          try {
+            this.fileBase64List = JSON.parse(uploadedFileData);
+          } catch (e) {
+            this.fileBase64List = [];
+            console.error("Failed to parse file list on updateView");
+          }
+        } else {
+          this.fileBase64List = [];
+        }
+      
+        this.displayPreviews(); // 👈 this is correct
+      }
 
     public getOutputs(): IOutputs {
         const fileData = this.fileBase64List.length > 0 ? this.fileBase64List[0].data : null;
